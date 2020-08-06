@@ -26,11 +26,12 @@ package gnet
 import (
 	"net"
 	"os"
+	"sync"
 
-	"github.com/panjf2000/gnet/internal/netpoll"
-	"github.com/panjf2000/gnet/pool/bytebuffer"
-	prb "github.com/panjf2000/gnet/pool/ringbuffer"
-	"github.com/panjf2000/gnet/ringbuffer"
+	"github.com/toury12/gnet/internal/netpoll"
+	"github.com/toury12/gnet/pool/bytebuffer"
+	prb "github.com/toury12/gnet/pool/ringbuffer"
+	"github.com/toury12/gnet/ringbuffer"
 	"golang.org/x/sys/unix"
 )
 
@@ -40,7 +41,8 @@ type conn struct {
 	ctx            interface{}            // user-defined context
 	loop           *eventloop             // connected event-loop
 	buffer         []byte                 // reuse memory of inbound data as a temporary buffer
-	codec          ICodec                 // codec for TCP
+	pool		   *sync.Pool			  // small object poll
+	codec          NICodec                 // codec for TCP
 	opened         bool                   // connection opened event fired
 	localAddr      net.Addr               // local addr
 	remoteAddr     net.Addr               // remote addr
@@ -54,6 +56,7 @@ func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr) *conn {
 		fd:             fd,
 		sa:             sa,
 		loop:           el,
+		pool:           el.svr.pool,
 		codec:          el.svr.codec,
 		inboundBuffer:  prb.Get(),
 		outboundBuffer: prb.Get(),
@@ -102,13 +105,13 @@ func (c *conn) open(buf []byte) {
 	}
 }
 
-func (c *conn) read() ([]byte, error) {
-	return c.codec.Decode(c)
+func (c *conn) read(dataFrame interface{}) (interface{}, error) {
+	return c.codec.Decode(c, dataFrame)
 }
 
-func (c *conn) write(buf []byte) (err error) {
+func (c *conn) write(buf interface{}) (err error) {
 	var outFrame []byte
-	if outFrame, err = c.codec.Encode(c, buf); err != nil {
+	if outFrame, err = c.codec.Encode(buf); err != nil {
 		return
 	}
 	if !c.outboundBuffer.IsEmpty() {
@@ -212,10 +215,10 @@ func (c *conn) BufferLength() int {
 	return c.inboundBuffer.Length() + len(c.buffer)
 }
 
-func (c *conn) AsyncWrite(buf []byte) error {
+func (c *conn) AsyncWrite(dataFrame interface{}) error {
 	return c.loop.poller.Trigger(func() (err error) {
 		if c.opened {
-			err = c.write(buf)
+			err = c.write(dataFrame)
 		}
 		return
 	})

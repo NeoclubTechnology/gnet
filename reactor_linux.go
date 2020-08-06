@@ -21,8 +21,8 @@
 package gnet
 
 import (
-	"github.com/panjf2000/gnet/errors"
-	"github.com/panjf2000/gnet/internal/netpoll"
+	"github.com/toury12/gnet/errors"
+	"github.com/toury12/gnet/internal/netpoll"
 )
 
 func (svr *server) activateMainReactor() {

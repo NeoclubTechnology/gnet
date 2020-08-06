@@ -21,9 +21,10 @@
 package gnet
 
 import (
+	"sync"
 	"time"
 
-	"github.com/panjf2000/gnet/internal/logging"
+	"github.com/toury12/gnet/internal/logging"
 )
 
 // Option is a function that will set up option.
@@ -63,6 +64,12 @@ type Options struct {
 
 	// ICodec encodes and decodes TCP stream.
 	Codec ICodec
+
+	//
+	NCodec NICodec
+
+	//
+	ObjPool *sync.Pool
 
 	// Logger is the customized logger for logging info, if it is not set,
 	// then gnet will use the default logger powered by go.uber.org/zap.
@@ -124,6 +131,21 @@ func WithCodec(codec ICodec) Option {
 		opts.Codec = codec
 	}
 }
+
+// WithCodec sets up a codec to handle TCP stream.
+func WithNCodec(codec NICodec) Option {
+	return func(opts *Options) {
+		opts.NCodec = codec
+	}
+}
+
+// WithObjPool sets up a sync pool to handle TCP stream.
+func WithObjPool(pool *sync.Pool) Option {
+	return func(opts *Options) {
+		opts.ObjPool = pool
+	}
+}
+
 
 // WithLogger sets up a customized logger.
 func WithLogger(logger logging.Logger) Option {

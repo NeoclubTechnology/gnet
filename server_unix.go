@@ -31,9 +31,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/panjf2000/gnet/errors"
-	"github.com/panjf2000/gnet/internal/logging"
-	"github.com/panjf2000/gnet/internal/netpoll"
+	"github.com/toury12/gnet/errors"
+	"github.com/toury12/gnet/internal/logging"
+	"github.com/toury12/gnet/internal/netpoll"
 )
 
 type server struct {
@@ -42,7 +42,8 @@ type server struct {
 	opts            *Options           // options with server
 	once            sync.Once          // make sure only signalShutdown once
 	cond            *sync.Cond         // shutdown signaler
-	codec           ICodec             // codec for TCP stream
+	pool 			*sync.Pool		   //
+	codec           NICodec            // codec for TCP stream
 	logger          logging.Logger     // customized logger for logging info
 	ticktock        chan time.Duration // ticker channel
 	mainLoop        *eventloop         // main event-loop for accepting connections
@@ -237,12 +238,8 @@ func serve(eventHandler EventHandler, listener *listener, options *Options) erro
 	svr.cond = sync.NewCond(&sync.Mutex{})
 	svr.ticktock = make(chan time.Duration, 1)
 	svr.logger = logging.DefaultLogger
-	svr.codec = func() ICodec {
-		if options.Codec == nil {
-			return new(BuiltInFrameCodec)
-		}
-		return options.Codec
-	}()
+	svr.codec = options.NCodec
+	svr.pool = options.ObjPool
 
 	server := Server{
 		svr:          svr,

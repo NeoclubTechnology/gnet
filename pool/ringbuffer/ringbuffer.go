@@ -29,7 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/panjf2000/gnet/ringbuffer"
+	"github.com/toury12/gnet/ringbuffer"
 )
 
 const (

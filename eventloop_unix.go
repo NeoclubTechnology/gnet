@@ -27,8 +27,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/panjf2000/gnet/errors"
-	"github.com/panjf2000/gnet/internal/netpoll"
+	"github.com/toury12/gnet/errors"
+	"github.com/toury12/gnet/internal/netpoll"
 	"golang.org/x/sys/unix"
 )
 
@@ -134,7 +134,14 @@ func (el *eventloop) loopRead(c *conn) error {
 	}
 	c.buffer = el.packet[:n]
 
-	for inFrame, _ := c.read(); inFrame != nil; inFrame, _ = c.read() {
+
+	for  {
+		inFrame, err := c.read(c.pool.Get())
+		if err != nil {
+			c.pool.Put(inFrame)
+			break
+		}
+
 		out, action := el.eventHandler.React(inFrame, c)
 		if out != nil {
 			el.eventHandler.PreWrite()
@@ -142,6 +149,7 @@ func (el *eventloop) loopRead(c *conn) error {
 				return err
 			}
 		}
+		c.pool.Put(inFrame)
 		switch action {
 		case None:
 		case Close:
@@ -289,7 +297,7 @@ func (el *eventloop) loopReadUDP(fd int) error {
 	out, action := el.eventHandler.React(el.packet[:n], c)
 	if out != nil {
 		el.eventHandler.PreWrite()
-		_ = c.sendTo(out)
+		_ = c.sendTo(out.([]byte))
 	}
 	if action == Shutdown {
 		return errors.ErrServerShutdown

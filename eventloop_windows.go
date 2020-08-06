@@ -22,11 +22,11 @@
 package gnet
 
 import (
-	"github.com/panjf2000/gnet/pool/bytebuffer"
+	"github.com/toury12/gnet/pool/bytebuffer"
 	"net"
 	"time"
 
-	"github.com/panjf2000/gnet/errors"
+	"github.com/toury12/gnet/errors"
 )
 
 type eventloop struct {

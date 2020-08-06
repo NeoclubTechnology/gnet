@@ -26,7 +26,7 @@ import (
 	"errors"
 	"fmt"
 
-	errorset "github.com/panjf2000/gnet/errors"
+	errorset "github.com/toury12/gnet/errors"
 )
 
 // CRLFByte represents a byte of CRLF.
@@ -39,6 +39,13 @@ type (
 		Encode(c Conn, buf []byte) ([]byte, error)
 		// Decode decodes frames from TCP stream via specific implementation.
 		Decode(c Conn) ([]byte, error)
+	}
+
+	NICodec interface {
+		// Encode encodes frames upon server responses into TCP stream.
+		Encode(dataFrame interface{}) ([]byte, error)
+		// Decode decodes frames from TCP stream via specific implementation.
+		Decode(c Conn, dataFrame interface{}) (interface{}, error)
 	}
 
 	// BuiltInFrameCodec is the built-in codec which will be assigned to gnet server when customized codec is not set up.

@@ -30,8 +30,8 @@ import (
 	"syscall"
 	"time"
 
-	errors2 "github.com/panjf2000/gnet/errors"
-	"github.com/panjf2000/gnet/internal/logging"
+	errors2 "github.com/toury12/gnet/errors"
+	"github.com/toury12/gnet/internal/logging"
 )
 
 // commandBufferSize represents the buffer size of event-loop command channel on Windows.

@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/panjf2000/gnet/internal/logging"
+	"github.com/toury12/gnet/internal/logging"
 )
 
 // Action is an action that occurs after the completion of an event.
@@ -121,7 +121,7 @@ type Conn interface {
 
 	// AsyncWrite writes data to client/connection asynchronously, usually you would call it in individual goroutines
 	// instead of the event-loop goroutines.
-	AsyncWrite(buf []byte) error
+	AsyncWrite(dataFrame interface{}) error
 
 	// Wake triggers a React event for this connection.
 	Wake() error
@@ -159,7 +159,7 @@ type (
 		// React fires when a connection sends the server data.
 		// Call c.Read() or c.ReadN(n) within the parameter:c to read incoming data from client.
 		// Parameter:out is the return value which is going to be sent back to the client.
-		React(frame []byte, c Conn) (out []byte, action Action)
+		React(frame interface{}, c Conn) (out interface{}, action Action)
 
 		// Tick fires immediately after the server starts and will fire again
 		// following the duration specified by the delay return value.
@@ -205,7 +205,7 @@ func (es *EventServer) PreWrite() {
 // React fires when a connection sends the server data.
 // Call c.Read() or c.ReadN(n) within the parameter:c to read incoming data from client.
 // Parameter:out is the return value which is going to be sent back to the client.
-func (es *EventServer) React(frame []byte, c Conn) (out []byte, action Action) {
+func (es *EventServer) React(frame interface{}, c Conn) (out interface{}, action Action) {
 	return
 }
 
