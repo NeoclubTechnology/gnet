@@ -220,6 +220,8 @@ func (c *conn) AsyncWrite(dataFrame interface{}) error {
 		if c.opened {
 			err = c.write(dataFrame)
 		}
+		// 回收小对象
+		c.pool.Put(dataFrame)
 		return
 	})
 }
