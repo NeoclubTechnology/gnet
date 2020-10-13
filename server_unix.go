@@ -43,6 +43,7 @@ type server struct {
 	once            sync.Once          // make sure only signalShutdown once
 	cond            *sync.Cond         // shutdown signaler
 	pool 			*sync.Pool		   //
+	bytePool        *sync.Pool         //
 	codec           NICodec            // codec for TCP stream
 	logger          logging.Logger     // customized logger for logging info
 	ticktock        chan time.Duration // ticker channel
@@ -240,6 +241,7 @@ func serve(eventHandler EventHandler, listener *listener, options *Options) erro
 	svr.logger = logging.DefaultLogger
 	svr.codec = options.NCodec
 	svr.pool = options.ObjPool
+	svr.bytePool = options.BytePool
 
 	server := Server{
 		svr:          svr,

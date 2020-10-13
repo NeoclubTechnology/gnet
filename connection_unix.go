@@ -49,6 +49,7 @@ type conn struct {
 	byteBuffer     *bytebuffer.ByteBuffer // bytes buffer for buffering current packet and data in ring-buffer
 	inboundBuffer  *ringbuffer.RingBuffer // buffer for data from client
 	outboundBuffer *ringbuffer.RingBuffer // buffer for data that is ready to write to client
+	bytePool       *sync.Pool			  // bytep pool
 }
 
 func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr) *conn {
@@ -57,6 +58,7 @@ func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr) *conn {
 		sa:             sa,
 		loop:           el,
 		pool:           el.svr.pool,
+		bytePool:       el.svr.bytePool,
 		codec:          el.svr.codec,
 		inboundBuffer:  prb.Get(),
 		outboundBuffer: prb.Get(),
@@ -110,8 +112,15 @@ func (c *conn) read(dataFrame interface{}) (interface{}, error) {
 }
 
 func (c *conn) write(buf interface{}) (err error) {
-	var outFrame []byte
-	if outFrame, err = c.codec.Encode(buf); err != nil {
+	var outFrame, dest []byte
+	if c.bytePool != nil {
+		dest = c.bytePool.Get().([]byte)
+		defer c.bytePool.Put(dest[:0])
+	} else {
+		dest = make([]byte, 0)
+	}
+
+	if outFrame, err = c.codec.Encode(buf, dest); err != nil {
 		return
 	}
 	if !c.outboundBuffer.IsEmpty() {
