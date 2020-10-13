@@ -71,6 +71,9 @@ type Options struct {
 	//
 	ObjPool *sync.Pool
 
+	// byte pool
+	BytePool *sync.Pool
+
 	// Logger is the customized logger for logging info, if it is not set,
 	// then gnet will use the default logger powered by go.uber.org/zap.
 	Logger logging.Logger
@@ -143,6 +146,13 @@ func WithNCodec(codec NICodec) Option {
 func WithObjPool(pool *sync.Pool) Option {
 	return func(opts *Options) {
 		opts.ObjPool = pool
+	}
+}
+
+// WithBytePool sets up a sync pool to encode.
+func WithBytePool(pool *sync.Pool) Option {
+	return func(opts *Options) {
+		opts.BytePool = pool
 	}
 }
 

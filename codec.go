@@ -43,7 +43,7 @@ type (
 
 	NICodec interface {
 		// Encode encodes frames upon server responses into TCP stream.
-		Encode(dataFrame interface{}) ([]byte, error)
+		Encode(dataFrame interface{}, dest []byte) ([]byte, error)
 		// Decode decodes frames from TCP stream via specific implementation.
 		Decode(c Conn, dataFrame interface{}) (interface{}, error)
 	}
