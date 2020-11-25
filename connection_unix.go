@@ -27,6 +27,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/toury12/gnet/internal/netpoll"
 	"github.com/toury12/gnet/pool/bytebuffer"
@@ -52,8 +53,8 @@ type conn struct {
 	bytePool       *sync.Pool			  // bytep pool
 }
 
-func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr) *conn {
-	return &conn{
+func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr, remoteAddr net.Addr) (c *conn) {
+	c = &conn{
 		fd:             fd,
 		sa:             sa,
 		loop:           el,
@@ -63,6 +64,14 @@ func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr) *conn {
 		inboundBuffer:  prb.Get(),
 		outboundBuffer: prb.Get(),
 	}
+	c.localAddr = el.ln.lnaddr
+	c.remoteAddr = remoteAddr
+	if el.svr.opts.TCPKeepAlive > 0 {
+		if proto := el.ln.network; proto == "tcp" || proto == "unix" {
+			_ = netpoll.SetKeepAlive(fd, int(el.svr.opts.TCPKeepAlive/time.Second))
+		}
+	}
+	return
 }
 
 func (c *conn) releaseTCP() {
@@ -135,8 +144,7 @@ func (c *conn) write(buf interface{}) (err error) {
 			err = c.loop.poller.ModReadWrite(c.fd)
 			return
 		}
-		_ = c.loop.loopCloseConn(c, os.NewSyscallError("write", err))
-		return
+		return c.loop.loopCloseConn(c, os.NewSyscallError("write", err))
 	}
 	if n < len(outFrame) {
 		_, _ = c.outboundBuffer.Write(outFrame[n:])

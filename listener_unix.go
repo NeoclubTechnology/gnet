@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	"github.com/toury12/gnet/errors"
+	"github.com/toury12/gnet/internal/netpoll"
 	"github.com/toury12/gnet/internal/reuseport"
 	"golang.org/x/sys/unix"
 )
@@ -38,6 +39,10 @@ type listener struct {
 	lnaddr        net.Addr
 	reusePort     bool
 	addr, network string
+}
+
+func (ln *listener) Dup() (int, string, error) {
+	return netpoll.Dup(ln.fd)
 }
 
 func (ln *listener) normalize() (err error) {

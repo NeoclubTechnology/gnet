@@ -22,12 +22,15 @@
 package gnet
 
 import (
+	"context"
 	"net"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/toury12/gnet/internal/logging"
+	"github.com/toury12/gnet/errors"
 )
 
 // Action is an action that occurs after the completion of an event.
@@ -52,7 +55,7 @@ type Server struct {
 	// Multicore indicates whether the server will be effectively created with multi-cores, if so,
 	// then you must take care of synchronizing the shared data between all event callbacks, otherwise,
 	// it will run the server with single thread. The number of threads in the server will be automatically
-	// assigned to the value of runtime.NumCPU().
+	// assigned to the value of logical CPUs usable by the current process.
 	Multicore bool
 
 	// The Addr parameter is the listening address that align
@@ -71,10 +74,21 @@ type Server struct {
 
 // CountConnections counts the number of currently active connections and returns it.
 func (s Server) CountConnections() (count int) {
-	s.svr.subEventLoopSet.iterate(func(i int, el *eventloop) bool {
+	s.svr.lb.iterate(func(i int, el *eventloop) bool {
 		count += int(atomic.LoadInt32(&el.connCount))
 		return true
 	})
+	return
+}
+
+// DupFd returns a copy of the underlying file descriptor of listener.
+// It is the caller's responsibility to close dupFD when finished.
+// Closing listener does not affect dupFD, and closing dupFD does not affect listener.
+func (s Server) DupFd() (dupFD int, err error) {
+	dupFD, sc, err := s.svr.ln.Dup()
+	if err != nil {
+		logging.DefaultLogger.Warnf("%s failed when duplicating new fd\n", sc)
+	}
 	return
 }
 
@@ -237,6 +251,14 @@ func Serve(eventHandler EventHandler, protoAddr string, opts ...Option) (err err
 	}
 	defer logging.Cleanup()
 
+	// The maximum number of operating system threads that the Go program can use is initially set to 10000,
+	// which should be the maximum amount of I/O event-loops locked to OS threads users can start up.
+	if options.LockOSThread && options.NumEventLoop > 10000 {
+		logging.DefaultLogger.Errorf("too many event-loops under LockOSThread mode, should be less than 10,000 "+
+			"while you are trying to set up %d\n", options.NumEventLoop)
+		return errors.ErrTooManyEventLoopThreads
+	}
+
 	network, addr := parseProtoAddr(protoAddr)
 
 	var ln *listener
@@ -245,7 +267,40 @@ func Serve(eventHandler EventHandler, protoAddr string, opts ...Option) (err err
 	}
 	defer ln.close()
 
-	return serve(eventHandler, ln, options)
+	return serve(eventHandler, ln, options, protoAddr)
+}
+
+// shutdownPollInterval is how often we poll to check whether server has been shut down during gnet.Stop().
+var shutdownPollInterval = 500 * time.Millisecond
+
+// Stop gracefully shuts down the server without interrupting any active eventloops,
+// it waits indefinitely for connections and eventloops to be closed and then shuts down.
+func Stop(ctx context.Context, protoAddr string) error {
+	var svr *server
+	if s, ok := serverFarm.Load(protoAddr); ok {
+		svr = s.(*server)
+		svr.signalShutdown()
+		defer serverFarm.Delete(protoAddr)
+	} else {
+		return errors.ErrServerInShutdown
+	}
+
+	if svr.isInShutdown() {
+		return errors.ErrServerInShutdown
+	}
+
+	ticker := time.NewTicker(shutdownPollInterval)
+	defer ticker.Stop()
+	for {
+		if svr.isInShutdown() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func parseProtoAddr(addr string) (network, address string) {
@@ -263,4 +318,18 @@ func sniffErrorAndLog(err error) {
 	if err != nil {
 		logging.DefaultLogger.Errorf(err.Error())
 	}
+}
+
+// channelBuffer determines whether the channel should be a buffered channel to get the best performance.
+func channelBuffer(preset int) int {
+	// Use blocking channel if GOMAXPROCS=1.
+	// This switches context from sender to receiver immediately,
+	// which results in higher performance (under go1.5 at least).
+	if runtime.GOMAXPROCS(0) == 1 {
+		return 0
+	}
+
+	// Use non-blocking workerChan if GOMAXPROCS>1,
+	// since otherwise the sender might be dragged down if the receiver is CPU-bound.
+	return preset
 }

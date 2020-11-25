@@ -24,20 +24,32 @@
 package gnet
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"runtime"
 	"time"
-
-	"github.com/toury12/gnet/errors"
+	"unsafe"
+	
+    gerrors "github.com/toury12/gnet/errors"
 	"github.com/toury12/gnet/internal/netpoll"
 	"golang.org/x/sys/unix"
 )
 
 type eventloop struct {
+	internalEventloop
+
+	// Prevents eventloop from false sharing by padding extra memory with the difference
+	// between the cache line size "s" and (eventloop mod s) for the most common CPU architectures.
+	_ [64 - unsafe.Sizeof(internalEventloop{})%64]byte
+}
+
+type internalEventloop struct {
 	ln                *listener               // listener
 	idx               int                     // loop index in the server loops list
 	svr               *server                 // server in loop
-	packet            []byte                  // read packet buffer
 	poller            *netpoll.Poller         // epoll or kqueue
+	packet            []byte                  // read packet buffer
 	connCount         int32                   // number of active connections in event-loop
 	connections       map[int]*conn           // loop connections fd -> conn
 	eventHandler      EventHandler            // user eventHandler
@@ -51,7 +63,12 @@ func (el *eventloop) closeAllConns() {
 	}
 }
 
-func (el *eventloop) loopRun() {
+func (el *eventloop) loopRun(lockOSThread bool) {
+	if lockOSThread {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}
+
 	defer func() {
 		el.closeAllConns()
 		el.ln.close()
@@ -65,13 +82,8 @@ func (el *eventloop) loopRun() {
 		go el.loopTicker()
 	}
 
-	switch err := el.poller.Polling(el.handleEvent); err {
-	case errors.ErrServerShutdown:
-		el.svr.logger.Infof("Event-loop(%d) is exiting normally on the signal error: %v", el.idx, err)
-	default:
-		el.svr.logger.Errorf("Event-loop(%d) is exiting due to an unexpected error: %v", el.idx, err)
-
-	}
+	err := el.poller.Polling(el.handleEvent)
+	el.svr.logger.Infof("Event-loop(%d) is exiting due to error: %v", el.idx, err)
 }
 
 func (el *eventloop) loopAccept(fd int) error {
@@ -90,10 +102,11 @@ func (el *eventloop) loopAccept(fd int) error {
 		if err = os.NewSyscallError("fcntl nonblock", unix.SetNonblock(nfd, true)); err != nil {
 			return err
 		}
-		c := newTCPConn(nfd, el, sa)
+
+		netAddr := netpoll.SockaddrToTCPOrUnixAddr(sa)
+		c := newTCPConn(nfd, el, sa, netAddr)
 		if err = el.poller.AddRead(c.fd); err == nil {
 			el.connections[c.fd] = c
-			el.calibrateCallback(el, 1)
 			return el.loopOpen(c)
 		}
 		return err
@@ -104,13 +117,7 @@ func (el *eventloop) loopAccept(fd int) error {
 
 func (el *eventloop) loopOpen(c *conn) error {
 	c.opened = true
-	c.localAddr = el.ln.lnaddr
-	c.remoteAddr = netpoll.SockaddrToTCPOrUnixAddr(c.sa)
-	if el.svr.opts.TCPKeepAlive > 0 {
-		if proto := el.ln.network; proto == "tcp" || proto == "unix" {
-			_ = netpoll.SetKeepAlive(c.fd, int(el.svr.opts.TCPKeepAlive/time.Second))
-		}
-	}
+	el.calibrateCallback(el, 1)
 
 	out, action := el.eventHandler.OnOpened(c)
 	if out != nil {
@@ -155,8 +162,11 @@ func (el *eventloop) loopRead(c *conn) error {
 		case Close:
 			return el.loopCloseConn(c, nil)
 		case Shutdown:
-			return errors.ErrServerShutdown
+			return gerrors.ErrServerShutdown
 		}
+
+		// Check the status of connection every loop since it might be closed during writing data back to client due to
+		// some kind of system error.
 		if !c.opened {
 			return nil
 		}
@@ -179,7 +189,7 @@ func (el *eventloop) loopWrite(c *conn) error {
 	}
 	c.outboundBuffer.Shift(n)
 
-	if len(head) == n && tail != nil {
+	if n == len(head) && tail != nil {
 		n, err = unix.Write(c.fd, tail)
 		if err != nil {
 			if err == unix.EAGAIN {
@@ -197,34 +207,45 @@ func (el *eventloop) loopWrite(c *conn) error {
 	return nil
 }
 
-func (el *eventloop) loopCloseConn(c *conn, err error) error {
+func (el *eventloop) loopCloseConn(c *conn, err error) (rerr error) {
 	if !c.opened {
-		el.svr.logger.Debugf("The fd=%d in event-loop(%d) is already closed, skipping it", c.fd, el.idx)
-		return nil
+		return fmt.Errorf("the fd=%d in event-loop(%d) is already closed, skipping it", c.fd, el.idx)
 	}
 
-	if !c.outboundBuffer.IsEmpty() && err == nil {
-		_ = el.loopWrite(c)
+	// Send residual data in buffer back to client before actually closing the connection.
+	if !c.outboundBuffer.IsEmpty() {
+		el.eventHandler.PreWrite()
+
+		head, tail := c.outboundBuffer.LazyReadAll()
+		if n, err := unix.Write(c.fd, head); err == nil {
+			if n == len(head) && tail != nil {
+				_, _ = unix.Write(c.fd, tail)
+			}
+		}
 	}
 
 	if err0, err1 := el.poller.Delete(c.fd), unix.Close(c.fd); err0 == nil && err1 == nil {
 		delete(el.connections, c.fd)
 		el.calibrateCallback(el, -1)
 		if el.eventHandler.OnClosed(c, err) == Shutdown {
-			return errors.ErrServerShutdown
+			return gerrors.ErrServerShutdown
 		}
 		c.releaseTCP()
 	} else {
 		if err0 != nil {
-			el.svr.logger.Warnf("Failed to delete fd=%d from poller in event-loop(%d), %v", c.fd, el.idx, err0)
+			rerr = fmt.Errorf("failed to delete fd=%d from poller in event-loop(%d): %v", c.fd, el.idx, err0)
 		}
 		if err1 != nil {
-			el.svr.logger.Warnf("Failed to close fd=%d in event-loop(%d), %v",
-				c.fd, el.idx, os.NewSyscallError("close", err1))
+			err1 = fmt.Errorf("failed to close fd=%d in event-loop(%d): %v", c.fd, el.idx, os.NewSyscallError("close", err1))
+			if rerr != nil {
+				rerr = errors.New(rerr.Error() + " & " + err1.Error())
+			} else {
+				rerr = err1
+			}
 		}
 	}
 
-	return nil
+	return
 }
 
 func (el *eventloop) loopWake(c *conn) error {
@@ -254,7 +275,7 @@ func (el *eventloop) loopTicker() {
 			switch action {
 			case None:
 			case Shutdown:
-				err = errors.ErrServerShutdown
+				err = gerrors.ErrServerShutdown
 			}
 			return
 		})
@@ -277,7 +298,7 @@ func (el *eventloop) handleAction(c *conn, action Action) error {
 	case Close:
 		return el.loopCloseConn(c, nil)
 	case Shutdown:
-		return errors.ErrServerShutdown
+		return gerrors.ErrServerShutdown
 	default:
 		return nil
 	}
@@ -285,12 +306,12 @@ func (el *eventloop) handleAction(c *conn, action Action) error {
 
 func (el *eventloop) loopReadUDP(fd int) error {
 	n, sa, err := unix.Recvfrom(fd, el.packet, 0)
-	if err != nil || n == 0 {
-		if err != nil && err != unix.EAGAIN {
-			el.svr.logger.Warnf("Failed to read UDP packet from fd=%d in event-loop(%d), %v",
-				fd, el.idx, os.NewSyscallError("recvfrom", err))
+	if err != nil {
+		if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
+			return nil
 		}
-		return nil
+		return fmt.Errorf("failed to read UDP packet from fd=%d in event-loop(%d), %v",
+			fd, el.idx, os.NewSyscallError("recvfrom", err))
 	}
 
 	c := newUDPConn(fd, el, sa)
@@ -300,7 +321,7 @@ func (el *eventloop) loopReadUDP(fd int) error {
 		_ = c.sendTo(out.([]byte))
 	}
 	if action == Shutdown {
-		return errors.ErrServerShutdown
+		return gerrors.ErrServerShutdown
 	}
 	c.releaseUDP()
 

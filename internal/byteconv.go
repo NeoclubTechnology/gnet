@@ -1,5 +1,4 @@
-// Copyright (c) 2019 Andy Pan
-// Copyright (c) 2018 Joshua J Baker
+// Copyright (c) 2020 Andy Pan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,56 +18,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package gnet
+package internal
 
 import (
-	"runtime"
-	"time"
+	"reflect"
+	"unsafe"
 )
 
-func (svr *server) listenerRun(lockOSThread bool) {
-	if lockOSThread {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-	}
+// BytesToString converts byte slice to a string without memory allocation.
+//
+// Note it may break if the implementation of string or slice header changes in the future go versions.
+func BytesToString(b []byte) string {
+	/* #nosec G103 */
+	return *(*string)(unsafe.Pointer(&b))
+}
 
-	var err error
-	defer func() { svr.signalShutdownWithErr(err) }()
-	var packet [0x10000]byte
-	for {
-		if svr.ln.pconn != nil {
-			// Read data from UDP socket.
-			n, addr, e := svr.ln.pconn.ReadFrom(packet[:])
-			if e != nil {
-				err = e
-				return
-			}
+// StringToBytes converts string to a byte slice without memory allocation.
+//
+// Note it may break if the implementation of string or slice header changes in the future go versions.
+func StringToBytes(s string) (b []byte) {
+	/* #nosec G103 */
+	sh := *(*reflect.StringHeader)(unsafe.Pointer(&s))
+	/* #nosec G103 */
+	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 
-			el := svr.lb.next(addr)
-			c := newUDPConn(el, svr.ln.lnaddr, addr)
-			el.ch <- packUDPConn(c, packet[:n])
-		} else {
-			// Accept TCP socket.
-			conn, e := svr.ln.ln.Accept()
-			if e != nil {
-				err = e
-				return
-			}
-			el := svr.lb.next(conn.RemoteAddr())
-			c := newTCPConn(conn, el)
-			el.ch <- c
-			go func() {
-				var packet [0x10000]byte
-				for {
-					n, err := c.conn.Read(packet[:])
-					if err != nil {
-						_ = c.conn.SetReadDeadline(time.Time{})
-						el.ch <- &stderr{c, err}
-						return
-					}
-					el.ch <- packTCPConn(c, packet[:n])
-				}
-			}()
-		}
-	}
+	bh.Data, bh.Len, bh.Cap = sh.Data, sh.Len, sh.Len
+	return b
 }

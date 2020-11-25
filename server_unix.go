@@ -24,11 +24,9 @@
 package gnet
 
 import (
-	"os"
-	"os/signal"
 	"runtime"
 	"sync"
-	"syscall"
+	"sync/atomic"
 	"time"
 
 	"github.com/toury12/gnet/errors"
@@ -37,19 +35,26 @@ import (
 )
 
 type server struct {
-	ln              *listener          // all the listeners
-	wg              sync.WaitGroup     // event-loop close WaitGroup
-	opts            *Options           // options with server
-	once            sync.Once          // make sure only signalShutdown once
-	cond            *sync.Cond         // shutdown signaler
-	pool 			*sync.Pool		   //
-	bytePool        *sync.Pool         //
-	codec           NICodec            // codec for TCP stream
-	logger          logging.Logger     // customized logger for logging info
-	ticktock        chan time.Duration // ticker channel
-	mainLoop        *eventloop         // main event-loop for accepting connections
-	eventHandler    EventHandler       // user eventHandler
-	subEventLoopSet loadBalancer       // event-loops for handling events
+	ln           *listener          // the listener for accepting new connections
+	lb           loadBalancer       // event-loops for handling events
+	wg           sync.WaitGroup     // event-loop close WaitGroup
+	opts         *Options           // options with server
+	once         sync.Once          // make sure only signalShutdown once
+	cond         *sync.Cond         // shutdown signaler
+	pool 		 *sync.Pool		    //
+	bytePool     *sync.Pool         //
+	codec        NICodec            // codec for TCP stream
+	logger       logging.Logger     // customized logger for logging info
+	ticktock     chan time.Duration // ticker channel
+	mainLoop     *eventloop         // main event-loop for accepting connections
+	inShutdown   int32              // whether the server is in shutdown
+	eventHandler EventHandler       // user eventHandler
+}
+
+var serverFarm sync.Map
+
+func (svr *server) isInShutdown() bool {
+	return atomic.LoadInt32(&svr.inShutdown) == 1
 }
 
 // waitForShutdown waits for a signal to shutdown.
@@ -69,10 +74,10 @@ func (svr *server) signalShutdown() {
 }
 
 func (svr *server) startEventLoops() {
-	svr.subEventLoopSet.iterate(func(i int, el *eventloop) bool {
+	svr.lb.iterate(func(i int, el *eventloop) bool {
 		svr.wg.Add(1)
 		go func() {
-			el.loopRun()
+			el.loopRun(svr.opts.LockOSThread)
 			svr.wg.Done()
 		}()
 		return true
@@ -80,17 +85,17 @@ func (svr *server) startEventLoops() {
 }
 
 func (svr *server) closeEventLoops() {
-	svr.subEventLoopSet.iterate(func(i int, el *eventloop) bool {
+	svr.lb.iterate(func(i int, el *eventloop) bool {
 		_ = el.poller.Close()
 		return true
 	})
 }
 
 func (svr *server) startSubReactors() {
-	svr.subEventLoopSet.iterate(func(i int, el *eventloop) bool {
+	svr.lb.iterate(func(i int, el *eventloop) bool {
 		svr.wg.Add(1)
 		go func() {
-			svr.activateSubReactor(el)
+			svr.activateSubReactor(el, svr.opts.LockOSThread)
 			svr.wg.Done()
 		}()
 		return true
@@ -109,17 +114,16 @@ func (svr *server) activateEventLoops(numEventLoop int) (err error) {
 
 		var p *netpoll.Poller
 		if p, err = netpoll.OpenPoller(); err == nil {
-			el := &eventloop{
-				ln:                l,
-				svr:               svr,
-				poller:            p,
-				packet:            make([]byte, 0x10000),
-				connections:       make(map[int]*conn),
-				eventHandler:      svr.eventHandler,
-				calibrateCallback: svr.subEventLoopSet.calibrate,
-			}
+			el := new(eventloop)
+			el.ln = l
+			el.svr = svr
+			el.poller = p
+			el.packet = make([]byte, 0x10000)
+			el.connections = make(map[int]*conn)
+			el.eventHandler = svr.eventHandler
+			el.calibrateCallback = svr.lb.calibrate
 			_ = el.poller.AddRead(el.ln.fd)
-			svr.subEventLoopSet.register(el)
+			svr.lb.register(el)
 		} else {
 			return
 		}
@@ -134,16 +138,15 @@ func (svr *server) activateEventLoops(numEventLoop int) (err error) {
 func (svr *server) activateReactors(numEventLoop int) error {
 	for i := 0; i < numEventLoop; i++ {
 		if p, err := netpoll.OpenPoller(); err == nil {
-			el := &eventloop{
-				ln:                svr.ln,
-				svr:               svr,
-				poller:            p,
-				packet:            make([]byte, 0x10000),
-				connections:       make(map[int]*conn),
-				eventHandler:      svr.eventHandler,
-				calibrateCallback: svr.subEventLoopSet.calibrate,
-			}
-			svr.subEventLoopSet.register(el)
+			el := new(eventloop)
+			el.ln = svr.ln
+			el.svr = svr
+			el.poller = p
+			el.packet = make([]byte, 0x10000)
+			el.connections = make(map[int]*conn)
+			el.eventHandler = svr.eventHandler
+			el.calibrateCallback = svr.lb.calibrate
+			svr.lb.register(el)
 		} else {
 			return err
 		}
@@ -153,19 +156,18 @@ func (svr *server) activateReactors(numEventLoop int) error {
 	svr.startSubReactors()
 
 	if p, err := netpoll.OpenPoller(); err == nil {
-		el := &eventloop{
-			ln:     svr.ln,
-			idx:    -1,
-			poller: p,
-			svr:    svr,
-		}
+		el := new(eventloop)
+		el.ln = svr.ln
+		el.idx = -1
+		el.poller = p
+		el.svr = svr
 		_ = el.poller.AddRead(el.ln.fd)
 		svr.mainLoop = el
 
 		// Start main reactor in background.
 		svr.wg.Add(1)
 		go func() {
-			svr.activateMainReactor()
+			svr.activateMainReactor(svr.opts.LockOSThread)
 			svr.wg.Done()
 		}()
 	} else {
@@ -183,12 +185,14 @@ func (svr *server) start(numEventLoop int) error {
 	return svr.activateReactors(numEventLoop)
 }
 
-func (svr *server) stop() {
+func (svr *server) stop(s Server) {
 	// Wait on a signal for shutdown
 	svr.waitForShutdown()
 
+	svr.eventHandler.OnShutdown(s)
+
 	// Notify all loops to close by closing all listeners
-	svr.subEventLoopSet.iterate(func(i int, el *eventloop) bool {
+	svr.lb.iterate(func(i int, el *eventloop) bool {
 		sniffErrorAndLog(el.poller.Trigger(func() error {
 			return errors.ErrServerShutdown
 		}))
@@ -210,9 +214,11 @@ func (svr *server) stop() {
 	if svr.mainLoop != nil {
 		sniffErrorAndLog(svr.mainLoop.poller.Close())
 	}
+
+	atomic.StoreInt32(&svr.inShutdown, 1)
 }
 
-func serve(eventHandler EventHandler, listener *listener, options *Options) error {
+func serve(eventHandler EventHandler, listener *listener, options *Options, protoAddr string) error {
 	// Figure out the correct number of loops/goroutines to use.
 	numEventLoop := 1
 	if options.Multicore {
@@ -229,15 +235,15 @@ func serve(eventHandler EventHandler, listener *listener, options *Options) erro
 
 	switch options.LB {
 	case RoundRobin:
-		svr.subEventLoopSet = new(roundRobinEventLoopSet)
+		svr.lb = new(roundRobinLoadBalancer)
 	case LeastConnections:
-		svr.subEventLoopSet = new(leastConnectionsEventLoopSet)
+		svr.lb = new(leastConnectionsLoadBalancer)
 	case SourceAddrHash:
-		svr.subEventLoopSet = new(sourceAddrHashEventLoopSet)
+		svr.lb = new(sourceAddrHashLoadBalancer)
 	}
 
 	svr.cond = sync.NewCond(&sync.Mutex{})
-	svr.ticktock = make(chan time.Duration, 1)
+	svr.ticktock = make(chan time.Duration, channelBuffer(1))
 	svr.logger = logging.DefaultLogger
 	svr.codec = options.NCodec
 	svr.pool = options.ObjPool
@@ -256,25 +262,15 @@ func serve(eventHandler EventHandler, listener *listener, options *Options) erro
 	case Shutdown:
 		return nil
 	}
-	defer svr.eventHandler.OnShutdown(server)
-
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer close(shutdown)
-
-	go func() {
-		if <-shutdown == nil {
-			return
-		}
-		svr.signalShutdown()
-	}()
 
 	if err := svr.start(numEventLoop); err != nil {
 		svr.closeEventLoops()
 		svr.logger.Errorf("gnet server is stopping with error: %v", err)
 		return err
 	}
-	defer svr.stop()
+	defer svr.stop(server)
+
+	serverFarm.Store(protoAddr, svr)
 
 	return nil
 }

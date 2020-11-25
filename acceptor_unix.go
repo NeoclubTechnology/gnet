@@ -25,6 +25,8 @@ package gnet
 import (
 	"os"
 
+	"github.com/toury12/gnet/errors"
+	"github.com/toury12/gnet/internal/netpoll"
 	"golang.org/x/sys/unix"
 )
 
@@ -34,19 +36,21 @@ func (svr *server) acceptNewConnection(fd int) error {
 		if err == unix.EAGAIN {
 			return nil
 		}
-		return os.NewSyscallError("accept", err)
+		return errors.ErrAcceptSocket
 	}
 	if err = os.NewSyscallError("fcntl nonblock", unix.SetNonblock(nfd, true)); err != nil {
 		return err
 	}
-	el := svr.subEventLoopSet.next(nfd)
-	c := newTCPConn(nfd, el, sa)
+
+	netAddr := netpoll.SockaddrToTCPOrUnixAddr(sa)
+	el := svr.lb.next(netAddr)
+	c := newTCPConn(nfd, el, sa, netAddr)
+
 	_ = el.poller.Trigger(func() (err error) {
 		if err = el.poller.AddRead(nfd); err != nil {
 			return
 		}
 		el.connections[nfd] = c
-		el.calibrateCallback(el, 1)
 		err = el.loopOpen(c)
 		return
 	})

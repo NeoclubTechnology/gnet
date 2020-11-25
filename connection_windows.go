@@ -72,19 +72,29 @@ func packUDPConn(c *stdConn, buf []byte) *udpConn {
 	return packet
 }
 
-func newTCPConn(conn net.Conn, el *eventloop) *stdConn {
-	return &stdConn{
+func newTCPConn(conn net.Conn, el *eventloop) (c *stdConn) {
+	c = &stdConn{
 		conn:          conn,
 		loop:          el,
 		codec:         el.svr.codec,
 		inboundBuffer: prb.Get(),
 	}
+	c.localAddr = el.svr.ln.lnaddr
+	c.remoteAddr = c.conn.RemoteAddr()
+	if el.svr.opts.TCPKeepAlive > 0 {
+		if tc, ok := conn.(*net.TCPConn); ok {
+			_ = tc.SetKeepAlive(true)
+			_ = tc.SetKeepAlivePeriod(el.svr.opts.TCPKeepAlive)
+		}
+	}
+	return
 }
 
 func (c *stdConn) releaseTCP() {
 	c.ctx = nil
 	c.localAddr = nil
 	c.remoteAddr = nil
+	c.conn = nil
 	prb.Put(c.inboundBuffer)
 	c.inboundBuffer = nil
 	bytebuffer.Put(c.buffer)
@@ -190,7 +200,9 @@ func (c *stdConn) AsyncWrite(buf []byte) (err error) {
 	var encodedBuf []byte
 	if encodedBuf, err = c.codec.Encode(c, buf); err == nil {
 		c.loop.ch <- func() (err error) {
-			_, err = c.conn.Write(encodedBuf)
+			if c.conn != nil {
+				_, err = c.conn.Write(encodedBuf)
+			}
 			return
 		}
 	}

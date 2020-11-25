@@ -22,14 +22,24 @@
 package gnet
 
 import (
-	"github.com/toury12/gnet/pool/bytebuffer"
-	"net"
+	"runtime"
 	"time"
+	"unsafe"
+
+	"github.com/toury12/gnet/pool/bytebuffer"
 
 	"github.com/toury12/gnet/errors"
 )
 
 type eventloop struct {
+	internalEventloop
+
+	// Prevents eventloop from false sharing by padding extra memory with the difference
+	// between the cache line size "s" and (eventloop mod s) for the most common CPU architectures.
+	_ [64 - unsafe.Sizeof(internalEventloop{})%64]byte
+}
+
+type internalEventloop struct {
 	ch                chan interface{}        // command channel
 	idx               int                     // loop index
 	svr               *server                 // server in loop
@@ -39,13 +49,18 @@ type eventloop struct {
 	calibrateCallback func(*eventloop, int32) // callback func for re-adjusting connCount
 }
 
-func (el *eventloop) loopRun() {
+func (el *eventloop) loopRun(lockOSThread bool) {
+	if lockOSThread {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}
+
 	var err error
 	defer func() {
 		if el.idx == 0 && el.svr.opts.Ticker {
 			close(el.svr.ticktock)
 		}
-		el.svr.signalShutdown(err)
+		el.svr.signalShutdownWithErr(err)
 		el.svr.loopWG.Done()
 		el.loopEgress()
 		el.svr.loopWG.Done()
@@ -73,24 +88,18 @@ func (el *eventloop) loopRun() {
 		case func() error:
 			err = v()
 		}
-		if err != nil {
-			el.svr.logger.Infof("Event-loop(%d) is exiting due to the error: %v", el.idx, err)
+
+		if err == errors.ErrServerShutdown {
 			break
+		} else if err != nil {
+			el.svr.logger.Infof("Event-loop(%d) is exiting due to the error: %v", el.idx, err)
 		}
 	}
 }
 
 func (el *eventloop) loopAccept(c *stdConn) error {
 	el.connections[c] = struct{}{}
-	c.localAddr = el.svr.ln.lnaddr
-	c.remoteAddr = c.conn.RemoteAddr()
 	el.calibrateCallback(el, 1)
-	if el.svr.opts.TCPKeepAlive > 0 {
-		if c, ok := c.conn.(*net.TCPConn); ok {
-			_ = c.SetKeepAlive(true)
-			_ = c.SetKeepAlivePeriod(el.svr.opts.TCPKeepAlive)
-		}
-	}
 
 	out, action := el.eventHandler.OnOpened(c)
 	if out != nil {
@@ -174,16 +183,21 @@ func (el *eventloop) loopTicker() {
 }
 
 func (el *eventloop) loopError(c *stdConn, err error) (e error) {
-	if e = c.conn.Close(); e == nil {
+	defer func() {
+		if err := c.conn.Close(); err != nil {
+			el.svr.logger.Warnf("Failed to close connection(%s), error: %v", c.remoteAddr.String(), err)
+			if e == nil {
+				e = err
+			}
+		}
 		delete(el.connections, c)
 		el.calibrateCallback(el, -1)
-		switch el.eventHandler.OnClosed(c, err) {
-		case Shutdown:
-			return errors.ErrServerShutdown
-		}
 		c.releaseTCP()
-	} else {
-		el.svr.logger.Warnf("Failed to close connection(%s), error: %v", c.remoteAddr.String(), e)
+	}()
+
+	switch el.eventHandler.OnClosed(c, err) {
+	case Shutdown:
+		return errors.ErrServerShutdown
 	}
 
 	return
