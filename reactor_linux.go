@@ -23,7 +23,7 @@ package gnet
 import (
 	"runtime"
 
-	"github.com/toury12/gnet/internal/netpoll"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
 )
 
 func (svr *server) activateMainReactor(lockOSThread bool) {

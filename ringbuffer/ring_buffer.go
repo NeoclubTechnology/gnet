@@ -22,8 +22,8 @@ package ringbuffer
 import (
 	"errors"
 
-	"github.com/toury12/gnet/internal"
-	"github.com/toury12/gnet/pool/bytebuffer"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal"
+	"gitlab.neoclub.cn/NeoGo/gnet/pool/bytebuffer"
 )
 
 const initSize = 1 << 12 // 4096 bytes for the first-time allocation on ring-buffer.

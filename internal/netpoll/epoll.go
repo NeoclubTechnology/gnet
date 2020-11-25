@@ -27,9 +27,9 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/toury12/gnet/errors"
-	"github.com/toury12/gnet/internal"
-	"github.com/toury12/gnet/internal/logging"
+	"gitlab.neoclub.cn/NeoGo/gnet/errors"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/logging"
 	"golang.org/x/sys/unix"
 )
 

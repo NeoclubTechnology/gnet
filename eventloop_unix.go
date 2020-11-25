@@ -30,9 +30,9 @@ import (
 	"runtime"
 	"time"
 	"unsafe"
-	
-    gerrors "github.com/toury12/gnet/errors"
-	"github.com/toury12/gnet/internal/netpoll"
+
+    gerrors "gitlab.neoclub.cn/NeoGo/gnet/errors"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
 	"golang.org/x/sys/unix"
 )
 

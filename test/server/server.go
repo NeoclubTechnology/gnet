@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/toury12/gnet"
-	"github.com/toury12/gnet/pool/goroutine"
+	"gitlab.neoclub.cn/NeoGo/gnet"
+	"gitlab.neoclub.cn/NeoGo/gnet/pool/goroutine"
 
-	"github.com/toury12/gnet/test/protocol"
+	"gitlab.neoclub.cn/NeoGo/gnet/test/protocol"
 )
 
 type customCodecServer struct {

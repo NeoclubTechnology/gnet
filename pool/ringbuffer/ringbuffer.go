@@ -29,7 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/toury12/gnet/ringbuffer"
+	"gitlab.neoclub.cn/NeoGo/gnet/ringbuffer"
 )
 
 const (

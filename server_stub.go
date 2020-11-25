@@ -23,7 +23,7 @@
 
 package gnet
 
-import "github.com/toury12/gnet/errors"
+import "gitlab.neoclub.cn/NeoGo/gnet/errors"
 
 type server struct {
 	subEventLoopSet loadBalancer // event-loops for handling events

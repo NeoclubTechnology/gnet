@@ -1,4 +1,4 @@
-module github.com/toury12/gnet
+module gitlab.neoclub.cn/NeoGo/gnet
 
 go 1.15
 

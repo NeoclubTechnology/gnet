@@ -25,8 +25,8 @@ package gnet
 import (
 	"os"
 
-	"github.com/toury12/gnet/errors"
-	"github.com/toury12/gnet/internal/netpoll"
+	"gitlab.neoclub.cn/NeoGo/gnet/errors"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
 	"golang.org/x/sys/unix"
 )
 

@@ -26,7 +26,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/toury12/gnet/errors"
+	"gitlab.neoclub.cn/NeoGo/gnet/errors"
 	"golang.org/x/sys/unix"
 )
 

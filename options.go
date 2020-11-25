@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/toury12/gnet/internal/logging"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/logging"
 )
 
 // Option is a function that will set up option.

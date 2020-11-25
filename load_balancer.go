@@ -27,7 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/toury12/gnet/internal"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal"
 )
 
 // LoadBalancing represents the the type of load-balancing algorithm.

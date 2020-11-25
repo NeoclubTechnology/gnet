@@ -29,9 +29,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/toury12/gnet/errors"
-	"github.com/toury12/gnet/internal/logging"
-	"github.com/toury12/gnet/internal/netpoll"
+	"gitlab.neoclub.cn/NeoGo/gnet/errors"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/logging"
+	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
 )
 
 type server struct {
