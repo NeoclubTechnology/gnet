@@ -238,7 +238,7 @@ func (c *conn) AsyncWrite(dataFrame interface{}) error {
 			err = c.write(dataFrame)
 		}
 		// 回收小对象
-		c.pool.Put(dataFrame)
+		//c.pool.Put(dataFrame)
 		return
 	})
 }

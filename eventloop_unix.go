@@ -143,9 +143,9 @@ func (el *eventloop) loopRead(c *conn) error {
 
 
 	for  {
-		inFrame, err := c.read(c.pool.Get())
+		inFrame, err := c.read(nil)
 		if err != nil {
-			c.pool.Put(inFrame)
+			//c.pool.Put(inFrame)
 			break
 		}
 
@@ -156,7 +156,7 @@ func (el *eventloop) loopRead(c *conn) error {
 				return err
 			}
 		}
-		c.pool.Put(inFrame)
+		//c.pool.Put(inFrame)
 		switch action {
 		case None:
 		case Close:
