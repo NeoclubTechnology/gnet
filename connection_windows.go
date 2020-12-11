@@ -24,9 +24,9 @@ package gnet
 import (
 	"net"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/pool/bytebuffer"
-	prb "gitlab.neoclub.cn/NeoGo/gnet/pool/ringbuffer"
-	"gitlab.neoclub.cn/NeoGo/gnet/ringbuffer"
+	"github.com/NeoclubTechnology/gnet/pool/bytebuffer"
+	prb "github.com/NeoclubTechnology/gnet/pool/ringbuffer"
+	"github.com/NeoclubTechnology/gnet/ringbuffer"
 )
 
 type stderr struct {

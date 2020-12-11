@@ -27,9 +27,9 @@ import (
 	"os"
 	"sync"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/errors"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/reuseport"
+	"github.com/NeoclubTechnology/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/internal/netpoll"
+	"github.com/NeoclubTechnology/gnet/internal/reuseport"
 	"golang.org/x/sys/unix"
 )
 

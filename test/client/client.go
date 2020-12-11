@@ -9,7 +9,7 @@ import (
 	"log"
 	"net"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/test/protocol"
+	"github.com/NeoclubTechnology/gnet/test/protocol"
 )
 
 // Example command: go run client.go

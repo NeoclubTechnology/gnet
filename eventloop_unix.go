@@ -31,8 +31,8 @@ import (
 	"time"
 	"unsafe"
 
-    gerrors "gitlab.neoclub.cn/NeoGo/gnet/errors"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
+    gerrors "github.com/NeoclubTechnology/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/internal/netpoll"
 	"golang.org/x/sys/unix"
 )
 

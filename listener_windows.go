@@ -25,8 +25,8 @@ import (
 	"os"
 	"sync"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/errors"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
+	"github.com/NeoclubTechnology/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/internal/netpoll"
 )
 
 type listener struct {

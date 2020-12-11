@@ -26,9 +26,9 @@ import (
 	"time"
 	"unsafe"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/pool/bytebuffer"
+	"github.com/NeoclubTechnology/gnet/pool/bytebuffer"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/errors"
 )
 
 type eventloop struct {

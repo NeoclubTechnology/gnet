@@ -28,8 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	errors2 "gitlab.neoclub.cn/NeoGo/gnet/errors"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/logging"
+	errors2 "github.com/NeoclubTechnology/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/internal/logging"
 )
 
 // commandBufferSize represents the buffer size of event-loop command channel on Windows.

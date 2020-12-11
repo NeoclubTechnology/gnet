@@ -29,10 +29,10 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
-	"gitlab.neoclub.cn/NeoGo/gnet/pool/bytebuffer"
-	prb "gitlab.neoclub.cn/NeoGo/gnet/pool/ringbuffer"
-	"gitlab.neoclub.cn/NeoGo/gnet/ringbuffer"
+	"github.com/NeoclubTechnology/gnet/internal/netpoll"
+	"github.com/NeoclubTechnology/gnet/pool/bytebuffer"
+	prb "github.com/NeoclubTechnology/gnet/pool/ringbuffer"
+	"github.com/NeoclubTechnology/gnet/ringbuffer"
 	"golang.org/x/sys/unix"
 )
 

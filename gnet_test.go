@@ -35,9 +35,9 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/errors"
-	"gitlab.neoclub.cn/NeoGo/gnet/pool/bytebuffer"
-	"gitlab.neoclub.cn/NeoGo/gnet/pool/goroutine"
+	"github.com/NeoclubTechnology/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/pool/bytebuffer"
+	"github.com/NeoclubTechnology/gnet/pool/goroutine"
 	"github.com/valyala/bytebufferpool"
 	"go.uber.org/zap"
 )

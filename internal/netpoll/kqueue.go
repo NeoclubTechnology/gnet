@@ -26,9 +26,9 @@ package netpoll
 import (
 	"os"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/errors"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal"
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/logging"
+	"github.com/NeoclubTechnology/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/internal"
+	"github.com/NeoclubTechnology/gnet/internal/logging"
 	"golang.org/x/sys/unix"
 )
 

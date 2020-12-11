@@ -29,8 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gitlab.neoclub.cn/NeoGo/gnet/internal/logging"
-	"gitlab.neoclub.cn/NeoGo/gnet/errors"
+	"github.com/NeoclubTechnology/gnet/internal/logging"
+	"github.com/NeoclubTechnology/gnet/errors"
 )
 
 // Action is an action that occurs after the completion of an event.

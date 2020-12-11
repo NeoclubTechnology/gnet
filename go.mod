@@ -1,4 +1,4 @@
-module gitlab.neoclub.cn/NeoGo/gnet
+module github.com/NeoclubTechnology/gnet
 
 go 1.15
 

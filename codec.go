@@ -26,7 +26,7 @@ import (
 	"errors"
 	"fmt"
 
-	errorset "gitlab.neoclub.cn/NeoGo/gnet/errors"
+	errorset "github.com/NeoclubTechnology/gnet/errors"
 )
 
 // CRLFByte represents a byte of CRLF.

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"gitlab.neoclub.cn/NeoGo/gnet"
+	"github.com/NeoclubTechnology/gnet"
 )
 
 // CustomLengthFieldProtocol : custom protocol

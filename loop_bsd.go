@@ -22,7 +22,7 @@
 
 package gnet
 
-import "gitlab.neoclub.cn/NeoGo/gnet/internal/netpoll"
+import "github.com/NeoclubTechnology/gnet/internal/netpoll"
 
 func (el *eventloop) handleEvent(fd int, filter int16) error {
 	if c, ok := el.connections[fd]; ok {
