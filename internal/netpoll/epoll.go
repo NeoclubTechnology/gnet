@@ -46,7 +46,7 @@ func OpenPoller() (poller *Poller, err error) {
 	poller = new(Poller)
 	if poller.fd, err = unix.EpollCreate1(unix.EPOLL_CLOEXEC); err != nil {
 		poller = nil
-		err = os.NewSyscaPollingllError("epoll_create1", err)
+		err = os.NewSyscallError("epoll_create1", err)
 		return
 	}
 	if poller.wfd, err = unix.Eventfd(0, unix.EFD_NONBLOCK|unix.EFD_CLOEXEC); err != nil {
