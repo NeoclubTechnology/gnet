@@ -50,10 +50,14 @@ func (svr *server) acceptNewConnection(fd int) error {
 		if err = el.poller.AddRead(nfd); err != nil {
 			_ = unix.Close(nfd)
 			c.releaseTCP()
+			svr.logger.Errorf("内核错误 AddRead:%s", err.Error())
 			return
 		}
 		el.connections[nfd] = c
 		err = el.loopOpen(c)
+		if err != nil {
+			svr.logger.Errorf("内核错误 loopOpen:%s", err.Error())
+		}
 		return
 	})
 	if err != nil {
