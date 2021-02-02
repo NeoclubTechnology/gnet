@@ -43,10 +43,11 @@ func (svr *server) acceptNewConnection(fd int) error {
 	}
 
 	netAddr := netpoll.SockaddrToTCPOrUnixAddr(sa)
+	svr.logger.Infof("SockaddrToTCPOrUnixAddr %s", netAddr.String())
 	el := svr.lb.next(netAddr)
 	c := newTCPConn(nfd, el, sa, netAddr)
-
 	err = el.poller.Trigger(func() (err error) {
+		svr.logger.Infof("AddRead %s", netAddr.String())
 		if err = el.poller.AddRead(nfd); err != nil {
 			_ = unix.Close(nfd)
 			c.releaseTCP()
@@ -55,6 +56,7 @@ func (svr *server) acceptNewConnection(fd int) error {
 		}
 		el.connections[nfd] = c
 		err = el.loopOpen(c)
+		svr.logger.Infof("loopOpen %s", netAddr.String())
 		if err != nil {
 			svr.logger.Errorf("内核错误 loopOpen:%s", err.Error())
 		}
