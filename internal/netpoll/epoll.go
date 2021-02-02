@@ -102,6 +102,7 @@ func (p *Poller) Polling(callback func(fd int, ev uint32) error) error {
 
 		for i := 0; i < n; i++ {
 			if fd := int(el.events[i].Fd); fd != p.wfd {
+				logging.DefaultLogger.Infof("Polling fd:%d", fd)
 				switch err = callback(fd, el.events[i].Events); err {
 				case nil:
 				case errors.ErrAcceptSocket, errors.ErrServerShutdown:

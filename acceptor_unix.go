@@ -43,7 +43,7 @@ func (svr *server) acceptNewConnection(fd int) error {
 	}
 
 	netAddr := netpoll.SockaddrToTCPOrUnixAddr(sa)
-	svr.logger.Infof("SockaddrToTCPOrUnixAddr %s", netAddr.String())
+	svr.logger.Infof("SockaddrToTCPOrUnixAddr %s fd:%d", netAddr.String(), fd)
 	el := svr.lb.next(netAddr)
 	c := newTCPConn(nfd, el, sa, netAddr)
 	err = el.poller.Trigger(func() (err error) {
