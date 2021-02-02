@@ -31,7 +31,9 @@ import (
 )
 
 func (svr *server) acceptNewConnection(fd int) error {
+	svr.logger.Infof("acceptNewConnection fd:%d", fd)
 	nfd, sa, err := unix.Accept(fd)
+	svr.logger.Infof("Accept fd:%d err:%s", fd, err)
 	if err != nil {
 		if err == unix.EAGAIN {
 			return nil
@@ -39,6 +41,7 @@ func (svr *server) acceptNewConnection(fd int) error {
 		return errors.ErrAcceptSocket
 	}
 	if err = os.NewSyscallError("fcntl nonblock", unix.SetNonblock(nfd, true)); err != nil {
+		svr.logger.Infof("NewSyscallError fd:%d err:%s", fd, err)
 		return err
 	}
 
