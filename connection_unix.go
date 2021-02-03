@@ -24,6 +24,7 @@
 package gnet
 
 import (
+	"github.com/NeoclubTechnology/gnet/internal/logging"
 	"net"
 	"os"
 	"sync"
@@ -42,15 +43,15 @@ type conn struct {
 	ctx            interface{}            // user-defined context
 	loop           *eventloop             // connected event-loop
 	buffer         []byte                 // reuse memory of inbound data as a temporary buffer
-	pool		   *sync.Pool			  // small object poll
-	codec          NICodec                 // codec for TCP
+	pool           *sync.Pool             // small object poll
+	codec          NICodec                // codec for TCP
 	opened         bool                   // connection opened event fired
 	localAddr      net.Addr               // local addr
 	remoteAddr     net.Addr               // remote addr
 	byteBuffer     *bytebuffer.ByteBuffer // bytes buffer for buffering current packet and data in ring-buffer
 	inboundBuffer  *ringbuffer.RingBuffer // buffer for data from client
 	outboundBuffer *ringbuffer.RingBuffer // buffer for data that is ready to write to client
-	bytePool       *sync.Pool			  // bytep pool
+	bytePool       *sync.Pool             // bytep pool
 }
 
 func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr, remoteAddr net.Addr) (c *conn) {
@@ -75,6 +76,7 @@ func newTCPConn(fd int, el *eventloop, sa unix.Sockaddr, remoteAddr net.Addr) (c
 }
 
 func (c *conn) releaseTCP() {
+	logging.DefaultLogger.Infof("releaseTCP ip:%s", c.remoteAddr.String())
 	c.opened = false
 	c.sa = nil
 	c.ctx = nil
